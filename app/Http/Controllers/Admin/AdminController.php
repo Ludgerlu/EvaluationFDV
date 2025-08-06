@@ -10,16 +10,12 @@ use App\Models\{User, Notes, Regions};
 class AdminController extends Controller
 {
 
-    // protected function getUserRegion($services)
-    // {
-    //     $regions = Regions::find($services->pluck('region'));
-    //     $region = json_decode($regions, true);
-    //     return  $region[0]['nom'];
-    // }
     protected function getUserRegion($services)
     {
         $regions = Regions::find($services->pluck('region'));
-        return json_decode($regions, true);
+        $region_Json = json_decode($regions, true);
+        $region = $region_Json[0]['nom'];
+        return $region ?? '-';
     }
 
     public function index()
@@ -31,7 +27,6 @@ class AdminController extends Controller
                     ->get()
                     ->map(function ($user) {
                         $user->regions = $this->getUserRegion($user->service);
-                        dd($user->regions);
                         return $user;
                     });
         // dd($users);
