@@ -1,12 +1,10 @@
-{{-- resources/views/users/create.blade.php --}}
+{{-- resources/views/admin/users/create.blade.php --}}
 @extends('layout.admin')
 
 @section('container')
 <div class="container">
     <div class="card">
-        <div class="card-header">
-            <h2 class="mb-4">Create New User</h2>
-        </div>
+        
         <div class="card-body">
             <form method="POST" action="{{ route('admin.users.store') }}">
                 @csrf
@@ -80,55 +78,54 @@
                     </div>
         
                     <!-- Region Selection -->
-                <div class="col-md-6">
-                    <label for="region_id" class="form-label">Region</label>
-                    <select class="form-select @error('region_id') is-invalid @enderror" 
-                            id="region_id" name="region_id">
-                        <option value="">Select Region</option>
-                        @foreach($regions as $region)
-                            <option value="{{ $region->id }}" {{ old('region_id') == $region->id ? 'selected' : '' }}>
-                                {{ $region->nom }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('region_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-        
-                <!-- Services (dynamic based on region) -->
-                <div class="col-md-6">
-                    <label for="service_id" class="form-label">Service</label>
-                    <select class="form-select @error('service_id') is-invalid @enderror" 
-                            id="service_id" name="service_id" disabled>
-                        <option value="">Select a region first</option>
-                    </select>
-                    @error('service_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-        
-                <!-- Parent User Selection (dynamic based on service) -->
-                <div class="col-md-6">
-                    <label for="parent_id" class="form-label">Manager (Parent User)</label>
-                    <select class="form-select @error('parent_id') is-invalid @enderror" 
-                            id="parent_id" name="parent_id" disabled>
-                        <option value="">Select a service first</option>
-                    </select>
-                    @error('parent_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-                <div>
-                    <div class="col-12 mt-4 d-flex justify-content-between">
-                        <a href="#" class="btn btn-secondary ms-2">Cancel</a>
-                        <button type="submit" class="btn btn-sabc-red">Create User</button>
+                    <div class="col-md-6">
+                        <label for="region_id" class="form-label">Region</label>
+                        <select class="form-select @error('region_id') is-invalid @enderror" 
+                                id="region_id" name="region_id">
+                            <option value="">Select Region</option>
+                            @foreach($regions as $region)
+                                <option value="{{ $region->id }}" {{ old('region_id') == $region->id ? 'selected' : '' }}>
+                                    {{ $region->nom }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('region_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
+        
+                    <!-- Services (dynamic based on region) -->
+                    <div class="col-md-6">
+                        <label for="service_id" class="form-label">Service</label>
+                        <select class="form-select @error('service_id') is-invalid @enderror" 
+                                id="service_id" name="service_id" disabled>
+                            <option value="">Select a region first</option>
+                        </select>
+                        @error('service_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+        
+                    <!-- Parent User Selection (dynamic based on service) -->
+                    <div class="col-md-6">
+                        <label for="parent_id" class="form-label">Manager</label>
+                        <select class="form-select @error('parent_id') is-invalid @enderror" 
+                                id="parent_id" name="parent_id" disabled>
+                            <option value="">Select a service first</option>
+                        </select>
+                        @error('parent_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+                
+                <div class="mt-4 d-flex justify-content-end">
+                    <a href="{{ route('admin.users.index') }}" class="btn btn-secondary me-2">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Create User</button>
                 </div>
             </form>
         </div>
     </div>
-    
 </div>
 @endsection
 
@@ -142,11 +139,12 @@
 
             $('#service_id').empty().prop('disabled', true);
             $('#parent_id').empty().prop('disabled', true);
-            if (regionId && (userType !== 'DR')) {
-                if(userType == 'CDC TT'){
-                    GetUserDrByRegion (regionId)
-                }else{
-                    GetServiceByRegion(regionId);
+            
+            if (regionId) {
+                if(userType === 'CDC TT' || userType === 'DR') {
+                    getUserDrByRegion(regionId);
+                } else {
+                    getServiceByRegion(regionId);
                 }
             }
         });
@@ -155,27 +153,20 @@
         $('#service_id').change(function() {
             var serviceId = $(this).val();
             var userType = $('#type').val();
+            
             $('#parent_id').empty().prop('disabled', true);
             
-            if (serviceId && ((userType !== 'CSC') || (userType !== 'DR'))) {
-                if(userType == 'CDC TT'){
-                    GetUserDrByService (serviceId)
-                }else{
-                    GetUserByService (serviceId)
+            if (serviceId) {
+                if(userType === 'CDC TT') {
+                    getUserDrByService(serviceId);
+                } else {
+                    getUserByService(serviceId);
                 }
-            }else{
-                $('#parent_id').empty().append('<option value="">No Manager</option>');
-                $('#parent_id').prop('disabled', false);
-
             }
         });
     });
-</script>
 
-
-
-<script>
-    function GetServiceByRegion(regionId){
+    function getServiceByRegion(regionId) {
         $.ajax({
             url: '{{ route("admin.services.by.region") }}',
             type: 'GET',
@@ -192,7 +183,7 @@
         });
     }
 
-    function GetUserByService (serviceId){
+    function getUserByService(serviceId) {
         $.ajax({
             url: '{{ route("admin.users.by.service") }}',
             type: 'GET',
@@ -211,7 +202,7 @@
         });
     }
 
-    function GetUserDrByRegion (regionId){
+    function getUserDrByRegion(regionId) {
         $.ajax({
             url: '{{ route("admin.users.dr.by.region") }}',
             type: 'GET',

@@ -49,7 +49,7 @@
                     </a>
                 </li>
                 <li>
-                    <a href="{{ route('admin.users.create') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
                         <i class="bi bi-box-seam"></i> User
                     </a>
                 </li>
@@ -154,6 +154,14 @@
                         >
                             ÉVALUATION DE LA FORCE DE VENTE
                         </h1>
+                    </div>
+                    <div class="col-12">
+                        <p
+                            class="fs-2 mb-3 text-center"
+                            style="font-family: 'Montserrat', sans-serif"
+                        >
+                            <b>ACTIVITÉS {{ Auth::user()->type }} {{ Auth::user()->surname }} {{  Auth::user()->name }}</b> 
+                        </p>
                     </div>
                     @yield('header')
                 </div>

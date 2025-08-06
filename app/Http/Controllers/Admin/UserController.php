@@ -4,34 +4,25 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{User, UserService, Regions,Services_cciaux,Notes};
+use App\Models\{User, UserService, Regions, Services_cciaux, Notes};
 use Illuminate\Support\Facades\Hash;
-
 
 class UserController extends Controller
 {
     public function index()
     {
-        $regions = Regions::all();
-        return view('admin.users.create', compact('regions'));
+        $users = User::with(['parent', 'service'])
+                    ->where('type', '<>', 'admin')
+                    ->orderBy('name')->get();
+        return view('admin.users.index', compact('users'));
     }
+
     public function create()
     {
         $regions = Regions::all();
         return view('admin.users.create', compact('regions'));
     }
 
-    public function show($userId)
-    {
-        $user = User::with('service')->findOrFail($userId);
-        $evaluations = Notes::with(['user', 'creator'])
-            ->where('id_utilisateur', $userId)
-            ->get();
-        $services = $user->service;
-        $regions = $this->getUserRegion($services);
-        $region = $regions[0]['nom']; 
-        return view('admin.users.show', compact('user','region' ,'evaluations'));
-    }
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -41,15 +32,10 @@ class UserController extends Controller
             'login' => 'required|string|max:100|unique:users',
             'email' => 'nullable|email|unique:users',
             'parent_id' => 'nullable|numeric',
-            'type' => 'required',
+            'type' => 'required|in:CDV,CDS,CSC,DR,CDC TT',
             'service_id' => 'nullable|exists:services_cciaux,id',
+            'region_id' => 'nullable|exists:regions,id',
         ]);
-
-        if(!isset($validated['parent_id'])){
-            $validated['parent_id'] = null;
-        }
-
-       
 
         // Create the user
         $user = User::create([
@@ -58,53 +44,133 @@ class UserController extends Controller
             'surname' => $validated['surname'],
             'login' => $validated['login'],
             'email' => $validated['email'],
-            'password' => Hash::make('password'),
-            'parent_id' => $validated['parent_id'],
+            'password' => Hash::make('password'), // Default password
+            'parent_id' => $validated['parent_id'] ?? null,
             'type' => $validated['type'],
-            'statut' => '1' // Active by default
+            'statut' => 1 // Active by default
         ]);
 
         // Attach services if any
         if (isset($validated['service_id'])) {
             $user->service()->attach($validated['service_id']);
-        }
-        
-        if($validated['type'] == 'DR' || $validated['type'] == 'CDC TT') {
-            $serviceId = Services_cciaux::where('region', $request->input('region_id'))
+        } elseif ($validated['type'] == 'DR' || $validated['type'] == 'CDC TT') {
+            // For DR and CDC TT, attach the first service of the selected region
+            $serviceId = Services_cciaux::where('region', $validated['region_id'])
                 ->orderBy('id', 'asc')
-                ->select('id')
-                ->first();
-            $user->service()->attach($serviceId);
+                ->value('id');
+                
+            if ($serviceId) {
+                $user->service()->attach($serviceId);
+            }
         }
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User created successfully!');
     }
-    
+
+    public function show($userId)
+    {
+        $user = User::with(['service', 'parent'])->findOrFail($userId);
+        $evaluations = Notes::with(['user', 'creator'])
+            ->where('id_utilisateur', $userId)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $services = $user->service;
+        $regions = $this->getUserRegion($services);
+        $region = $regions[0]['nom'] ?? 'N/A';
+
+        return view('admin.users.show', compact('user', 'region', 'evaluations'));
+    }
+
+    public function edit($userId)
+    {
+        $user = User::with('service')->findOrFail($userId);
+        $regions = Regions::all();
+        
+        $services = collect();
+        if ($user->service->isNotEmpty()) {
+            $services = Services_cciaux::where('region', $user->service->first()->region)->get();
+        }
+
+        return view('admin.users.edit', compact('user', 'regions', 'services'));
+    }
+
+    public function update(Request $request, $userId)
+    {
+        $validated = $request->validate([
+            'matricule' => 'required|numeric|unique:users,matricule,'.$userId.',matricule',
+            'name' => 'required|string|max:255',
+            'surname' => 'required|string|max:100',
+            'login' => 'required|string|max:100|unique:users,login,'.$userId.',matricule',
+            'email' => 'nullable|email|unique:users,email,'.$userId.',matricule',
+            'parent_id' => 'nullable|numeric',
+            'type' => 'required|in:CDV,CDS,CSC,DR,CDC TT',
+            'service_id' => 'nullable|exists:services_cciaux,id',
+            'region_id' => 'nullable|exists:regions,id',
+            'statut' => 'required|boolean',
+        ]);
+
+        $user = User::findOrFail($userId);
+        $user->update([
+            'matricule' => $validated['matricule'],
+            'name' => $validated['name'],
+            'surname' => $validated['surname'],
+            'login' => $validated['login'],
+            'email' => $validated['email'],
+            'parent_id' => $validated['parent_id'] ?? null,
+            'type' => $validated['type'],
+            'statut' => $validated['statut'],
+        ]);
+
+        // Update services
+        if (isset($validated['service_id'])) {
+            $user->service()->sync([$validated['service_id']]);
+        } elseif ($validated['type'] == 'DR' || $validated['type'] == 'CDC TT') {
+            // For DR and CDC TT, attach the first service of the selected region
+            $serviceId = Services_cciaux::where('region', $validated['region_id'])
+                ->orderBy('id', 'asc')
+                ->value('id');
+                
+            if ($serviceId) {
+                $user->service()->sync([$serviceId]);
+            }
+        } else {
+            $user->service()->detach();
+        }
+
+        return redirect()->route('admin.users.show', $user->matricule)
+            ->with('success', 'User updated successfully!');
+    }
+
     public function note($userId, $noteId)
     {
         $user = User::with('service')->findOrFail($userId);
         $evaluation = Notes::with(['user', 'creator'])
             ->where('id_note', $noteId)
             ->firstOrFail();
+            
         $services = $user->service;
         $regions = $this->getUserRegion($services);
-        $region = $regions[0]['nom']; 
-        $lable = $this->getEvaluationLabelType($user->type);
+        $region = $regions[0]['nom'] ?? 'N/A';
+        
+        $labels = $this->getEvaluationLabelType($user->type);
+
         return view('admin.users.note', [
             'evaluation' => $evaluation,
             'region' => $region,
-            'labels' => $lable,
+            'labels' => $labels,
         ]);
-
     }
 
-    public function deleteNote ($noteId){
+    public function deleteNote($noteId)
+    {
         $note = Notes::find($noteId);
-        if($note){
+        if ($note) {
             $note->delete();
+            return redirect()->back()->with('success', 'Evaluation deleted successfully!');
         }
-        return redirect()->back();
+        return redirect()->back()->with('error', 'Evaluation not found!');
     }
 
     public function getServicesByRegion(Request $request)
@@ -119,31 +185,33 @@ class UserController extends Controller
         $serviceId = $request->input('service_id');
         
         $userIds = UserService::where('id_service', $serviceId)
-                ->pluck('id_user');
-                
+            ->pluck('id_user');
+            
         $users = User::whereIn('matricule', $userIds)
-                ->whereIn('type', ['CDV', 'CSC'])
-                ->get();
-                
+            ->whereIn('type', ['CDV', 'CSC'])
+            ->get();
+            
         return response()->json($users);
     }
 
     public function getUsersDrByRegion(Request $request)
     {
         $serviceIds = Services_cciaux::where('region', $request->input('region_id'))
-                ->orderBy('id', 'asc')
-                ->select('id')
-                ->first();
-        $serviceId = $serviceIds->id;
-        // $serviceId = '1';
+            ->orderBy('id', 'asc')
+            ->select('id')
+            ->first();
 
-        $userIds = UserService::where('id_service', $serviceId)
-                ->pluck('id_user');
-                
+        if (!$serviceIds) {
+            return response()->json([]);
+        }
+
+        $userIds = UserService::where('id_service', $serviceIds->id)
+            ->pluck('id_user');
+            
         $users = User::whereIn('matricule', $userIds)
-                ->whereIn('type', ['DR'])
-                ->get();        
-        // dd($users);
+            ->where('type', 'DR')
+            ->get();        
+            
         return response()->json($users);
     }
 
@@ -161,8 +229,7 @@ class UserController extends Controller
             'CDS' => $this->getEvaluationLabelsCDS(),
         ];
 
-        return $labels[$type];
-
+        return $labels[$type] ?? [];
     }
 
     protected function getEvaluationLabelsCSC(): array
@@ -252,6 +319,4 @@ class UserController extends Controller
             "Techniques d'animation de réunion" =>['5',["Anime les réunions de manière désorganisée. Manque de clarté dans la communication. Les réunions manquent de structure et d'objectifs clairs.","Anime les réunions de manière basique. Suit un ordre du jour préétabli sans variété. Manque parfois de dynamisme. Les participants s'impliquent de manière limitée.","Anime efficacement les réunions en maintenant l'engagement des participants. Utilise diverses techniques pour encourager la participation de tous. Gère le temps de manière efficace et assure que les objectifs de la réunion sont atteints.","Anime les réunions avec expertise. Utilise des méthodes créatives pour stimuler la réflexion et la collaboration. Encourage une participation active et équitable de tous les participants. Gère les situations conflictuelles de manière constructive.","Expert en techniques d'animation de réunion. Anime des réunions de manière magistrale, en captivant l'attention et en suscitant l'engagement de tous. Utilise des techniques avancées pour favoriser l'innovation et la résolution de problèmes. Anticipe les besoins des participants et adapte l'animation en conséquence pour des résultats optimaux."],'3']
         ];
     }
-
-
 }

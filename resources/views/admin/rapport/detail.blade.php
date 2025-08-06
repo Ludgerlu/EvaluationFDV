@@ -1,17 +1,5 @@
 @extends('layout.admin')
 
-@section('header')
-
-<div class="col-12">
-    <p
-        class="fs-2 mb-3 text-center"
-        style="font-family: 'Montserrat', sans-serif"
-    >
-        <b>ACTIVITÉS {{ Auth::user()->type }} {{ Auth::user()->surname }} {{  Auth::user()->name }}</b> 
-    </p>
-</div>
-@endsection
-
 
 @section('container')
     <div class="container">
@@ -52,12 +40,8 @@
                                         <td>{{ $evaluation['score'] }} / 20</td>
                                         <td>{{ $evaluation['created_at'] }}</td>
                                         <td>
-                                            <a href="{{ route('admin.users.note.show', [$user['user_id'], $evaluation['id']]) }}" class="btn btn-sm btn-primary">
-                                                Détails
-                                            </a>
-                                            <a href="{{ route('admin.note.confirm.delete', $evaluation['id']) }}" class="btn btn-sm btn-warning">
-                                                Supprimer 
-                                            </a>
+                                            <a href="{{ route('admin.users.note.show', [$user['user_id'], $evaluation['id']]) }}" class="btn btn-sm btn-info">Détails</a>
+                                            <a href="{{ route('admin.note.confirm.delete', $evaluation['id']) }}" class="btn btn-sm btn-primary">Supprimer</a>
                                         </td>
                                     </tr>
                                 @endforeach

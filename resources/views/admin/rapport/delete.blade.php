@@ -1,17 +1,5 @@
 @extends('layout.admin')
 
-@section('header')
-
-<div class="col-12">
-    <p
-        class="fs-2 mb-3 text-center"
-        style="font-family: 'Montserrat', sans-serif"
-    >
-        <b>ACTIVITÉS {{ Auth::user()->type }} {{ Auth::user()->surname }} {{  Auth::user()->name }}</b> 
-    </p>
-</div>
-@endsection
-
 
 @section('container')
     <div class="container">
